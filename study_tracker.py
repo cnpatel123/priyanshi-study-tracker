@@ -121,6 +121,7 @@ EXAM_TYPES = [
     "School Exam",
     "KS Class Test",
     "Mock Test",
+    "Deepa mam Class",
     "Others"
 ]
 
@@ -368,21 +369,16 @@ def main():
             plan_df['plan_date'] = pd.to_datetime(plan_df['plan_date'])
 
         st.subheader("Planned vs Actual Study Hours")
-        # Aggregate planned and actual
-        planned_agg = plan_df.groupby(['plan_date','subject','chapter']).agg({'planned_hours':'sum'}).reset_index()
-        actual_agg = df.groupby(['date','subject','chapter']).agg({'hours_studied':'sum'}).reset_index()
-
+        planned_agg = plan_df.groupby(['plan_date', 'subject', 'chapter']).agg({'planned_hours': 'sum'}).reset_index()
+        actual_agg = df.groupby(['date', 'subject', 'chapter']).agg({'hours_studied': 'sum'}).reset_index()
         merged = pd.merge(planned_agg, actual_agg,
                           left_on=['plan_date','subject','chapter'],
                           right_on=['date','subject','chapter'], how='outer')
-
         merged['plan_date'] = merged['plan_date'].fillna(merged['date'])
         merged['planned_hours'] = merged['planned_hours'].fillna(0)
         merged['hours_studied'] = merged['hours_studied'].fillna(0)
-
         merged = merged.rename(columns={'plan_date':'Date', 'subject':'Subject', 'chapter':'Chapter',
                                       'planned_hours':'Planned Hours', 'hours_studied':'Actual Hours'})
-
         merged = merged[['Date','Subject','Chapter','Planned Hours','Actual Hours']].sort_values('Date', ascending=False)
         st.dataframe(merged, use_container_width=True)
 
