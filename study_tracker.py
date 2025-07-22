@@ -94,7 +94,7 @@ SUBJECT_CHAPTERS = {
         "Consumer Rights"
     ],
     "Gujarati": [
-        "પ્રથમ અધ્યાય: સમજદારીનો માર્ગ",
+        "પ્રથમ અધ્યાન: સમજદારીનો માર્ગ",
         "બીજું અધ્યાય: કુદરતના રંગ",
         "તૃતીય અધ્યાય: જીવનના મૂલ્યો",
         "ચોથું અધ્યાય: સંસ્કૃતિ અને પરંપરા",
@@ -113,7 +113,8 @@ BOOK_MATERIALS = [
     "US Notes",
     "KS Power Book",
     "KS Objective Book",
-    "US Worksheet"
+    "US Worksheet",
+    "Deepa mam Class"
 ]
 
 EXAM_TYPES = [
@@ -332,17 +333,17 @@ def main():
         df = get_study_records()
         plan_df = get_study_plans()
 
-        # Filters
+        # Filters (use unique keys)
         with st.expander("Filters", expanded=True):
             subj_set = set(df['subject']).union(set(plan_df['subject']))
             chap_set = set(df['chapter']).union(set(plan_df['chapter']))
             book_set = set(df['book_material'])
-            f_subject = st.multiselect("Subject", options=sorted(subj_set), default=None)
-            f_chapter = st.multiselect("Chapter", options=sorted(chap_set), default=None)
-            f_book = st.multiselect("Book/Material Used", options=sorted(book_set), default=None)
+            f_subject = st.multiselect("Subject", options=sorted(subj_set), key="filter_subject")
+            f_chapter = st.multiselect("Chapter", options=sorted(chap_set), key="filter_chapter")
+            f_book = st.multiselect("Book/Material Used", options=sorted(book_set), key="filter_book")
             start_date_col, end_date_col = st.columns(2)
-            f_start_date = start_date_col.date_input("Start Date", value=None)
-            f_end_date = end_date_col.date_input("End Date", value=None)
+            f_start_date = start_date_col.date_input("Start Date", value=None, key="filter_start_date")
+            f_end_date = end_date_col.date_input("End Date", value=None, key="filter_end_date")
 
         # Filter study records
         if f_subject:
@@ -361,8 +362,10 @@ def main():
             plan_df = plan_df[pd.to_datetime(plan_df['plan_date']) <= pd.to_datetime(f_end_date)]
 
         # Convert dates
-        df['date'] = pd.to_datetime(df['date'])
-        plan_df['plan_date'] = pd.to_datetime(plan_df['plan_date'])
+        if not df.empty:
+            df['date'] = pd.to_datetime(df['date'])
+        if not plan_df.empty:
+            plan_df['plan_date'] = pd.to_datetime(plan_df['plan_date'])
 
         st.subheader("Planned vs Actual Study Hours")
         # Aggregate planned and actual
@@ -403,11 +406,11 @@ def main():
         exam_df = get_exam_records()
 
         with st.expander("Filters", expanded=True):
-            f_subject_exam = st.multiselect("Subject", options=sorted(exam_df['subject'].unique()), default=None)
-            f_exam_type = st.multiselect("Exam Type", options=sorted(exam_df['exam_type'].unique()), default=None)
+            f_subject_exam = st.multiselect("Subject", options=sorted(exam_df['subject'].unique()), key="filter_exam_subject")
+            f_exam_type = st.multiselect("Exam Type", options=sorted(exam_df['exam_type'].unique()), key="filter_exam_type")
             start_exam_col, end_exam_col = st.columns(2)
-            start_exam_date = start_exam_col.date_input("Exam Start Date", value=None)
-            end_exam_date = end_exam_col.date_input("Exam End Date", value=None)
+            start_exam_date = start_exam_col.date_input("Exam Start Date", value=None, key="filter_exam_start_date")
+            end_exam_date = end_exam_col.date_input("Exam End Date", value=None, key="filter_exam_end_date")
 
         if f_subject_exam:
             exam_df = exam_df[exam_df['subject'].isin(f_subject_exam)]
