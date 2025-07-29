@@ -372,4 +372,8 @@ def main():
 
             st.markdown("### Delete an Exam Record")
             del_exam_id = st.text_input(
-                "Enter Exam Record ID to delete (copy from ID column above)", key="del_exam
+               del_exam_id = st.text_input(
+    "Enter Exam Record ID to delete (copy from ID column above)",
+    key="del_exam_id"
+)
+
