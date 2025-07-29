@@ -6,9 +6,12 @@ from datetime import datetime
 from bson.objectid import ObjectId
 
 # ---- CONFIGURATION ----
-# Replace <password> and <your-cluster> with your actual MongoDB Atlas password and cluster details
-MONGO_URI = "mongodb+srv://cnpatel123:cnpatel12345@studytracker.xer6ru9.mongodb.net/?retryWrites=true&w=majority&appName=Studytracker"
-
+# Replace <password> and <your-cluster> with your actual MongoDB Atlas password and cluster details.
+# If your password has special symbols, URL-encode it (e.g. @ → %40).
+MONGO_URI = (
+    "mongodb+srv://cnpatel123:cnpatel12345@studytracker.xer6ru9.mongodb.net/"
+    "?retryWrites=true&w=majority&appName=Studytracker"
+)
 DB_NAME = "studytracker_db"
 
 def get_client():
@@ -43,7 +46,13 @@ def get_study_records():
 
 def delete_study_record(record_id):
     col = get_collection("study_records")
-    col.delete_one({"_id": ObjectId(record_id)})
+    try:
+        obj_id = ObjectId(record_id)
+    except Exception:
+        raise ValueError("Invalid Study Record ID format.")
+    result = col.delete_one({"_id": obj_id})
+    if result.deleted_count == 0:
+        raise ValueError("Study record ID not found.")
 
 # ---- EXAM RECORDS ----
 
@@ -68,9 +77,15 @@ def get_exam_records():
 
 def delete_exam_record(record_id):
     col = get_collection("exam_records")
-    col.delete_one({"_id": ObjectId(record_id)})
+    try:
+        obj_id = ObjectId(record_id)
+    except Exception:
+        raise ValueError("Invalid Exam Record ID format.")
+    result = col.delete_one({"_id": obj_id})
+    if result.deleted_count == 0:
+        raise ValueError("Exam record ID not found.")
 
-# ---- STUDY PLAN ----
+# ---- STUDY PLANS ----
 
 def add_study_plan(plan_date, subject, chapter, planned_hours, remarks):
     col = get_collection("study_plans")
@@ -92,9 +107,15 @@ def get_study_plans():
 
 def delete_study_plan(record_id):
     col = get_collection("study_plans")
-    col.delete_one({"_id": ObjectId(record_id)})
+    try:
+        obj_id = ObjectId(record_id)
+    except Exception:
+        raise ValueError("Invalid Study Plan Record ID format.")
+    result = col.delete_one({"_id": obj_id})
+    if result.deleted_count == 0:
+        raise ValueError("Study plan record ID not found.")
 
-# --- Optional: Test connection snippet ---
+# ---- Optional: Test connection snippet ----
 if __name__ == "__main__":
     try:
         client = get_client()
