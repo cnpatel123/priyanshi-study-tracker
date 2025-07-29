@@ -7,7 +7,7 @@ from bson.objectid import ObjectId
 
 # ---- CONFIGURATION ----
 # Replace <password> and <your-cluster> as per your MongoDB Atlas cluster details
-MONGO_URI = "mongodb+srv://studytracker:<password>@<your-cluster>.mongodb.net/?retryWrites=true&w=majority"
+MONGO_URI = "mongodb+srv://cnpatel123:<cnpatel@123>@studytracker.xer6ru9.mongodb.net/?retryWrites=true&w=majority&appName=Studytracker"
 DB_NAME = "studytracker_db"
 
 def get_client():
