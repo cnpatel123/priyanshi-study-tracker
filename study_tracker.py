@@ -370,9 +370,10 @@ def main():
 
             st.dataframe(display, use_container_width=True)
 
-     st.markdown("### Delete an Exam Record")
+    st.markdown("### Delete an Exam Record")
 del_exam_id = st.text_input(
-    "Enter Exam Record ID to delete (copy from ID column above)", key="del_exam_id"
+    "Enter Exam Record ID to delete (copy from ID column above)",
+    key="del_exam_id"
 )
 if st.button("Delete Exam Record"):
     if del_exam_id:
@@ -384,5 +385,6 @@ if st.button("Delete Exam Record"):
             st.error(f"Error deleting exam record: {e}")
     else:
         st.error("Please enter a valid Exam Record ID")
+
 
 
