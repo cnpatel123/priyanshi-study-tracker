@@ -4,7 +4,7 @@ from datetime import date, datetime
 import plotly.express as px
 from io import BytesIO
 
-# Import MongoDB functions (make sure mongo_connector.py is in the same folder)
+# Import MongoDB database functions from your separate connector module
 from mongo_connector import (
     add_study_record, get_study_records, delete_study_record,
     add_exam_record, get_exam_records, delete_exam_record,
@@ -17,7 +17,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Subject chapters dictionary
 SUBJECT_CHAPTERS = {
     "Science": [
         "Light - Reflection and Refraction",
@@ -103,7 +102,7 @@ SUBJECT_CHAPTERS = {
     "Gujarati": [
         "પ્રથમ અધ્યાન: સમજદારીનો માર્ગ",
         "બીજું અધ્યાય: કુદરતના રંગ",
-        "તૃતીય અધ્યાય: જીવનના મૂલ્યો",
+        "તૃતીય અધ്യાય: જીવનના મૂલ્યો",
         "ચોથું અધ્યાય: સંસ્કૃતિ અને પરંપરા",
         "પાંચમું અધ્યાય: વૈજ્ઞાનિક વિચાર",
         "છઠ્ઠું અધ્યાય: સાહિત્યનું મહત્વ",
@@ -132,19 +131,18 @@ EXAM_TYPES = [
     "Others"
 ]
 
-# Export Excel function reading from MongoDB
 def export_all_data():
     study_df = get_study_records()
     exam_df = get_exam_records()
     plan_df = get_study_plans()
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        # Rename _id to ID for display friendliness
-        for df, sheet in [(study_df, 'Study Records'), (exam_df, 'Exam Records'), (plan_df, 'Study Plans')]:
+        for df, sheet_name in [(study_df, 'Study Records'), (exam_df, 'Exam Records'), (plan_df, 'Study Plans')]:
             if not df.empty:
+                # Rename MongoDB _id to ID
                 if "_id" in df.columns:
                     df.rename(columns={"_id": "ID"}, inplace=True)
-                df.to_excel(writer, sheet_name=sheet, index=False)
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
     return output.getvalue()
 
 def main():
@@ -155,7 +153,6 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # Define tabs for UI
     tabs = st.tabs([
         "📝 Add Study Record",
         "📅 Plan Study",
@@ -164,7 +161,7 @@ def main():
         "📈 Exam Dashboard"
     ])
 
-    # --- ADD STUDY RECORD TAB ---
+    # ========== Add Study Record ==========
     with tabs[0]:
         st.header("📝 Add New Study Record")
         sel_subject = st.selectbox("📖 Subject", options=list(SUBJECT_CHAPTERS.keys()), key="study_subject")
@@ -186,7 +183,7 @@ def main():
                 else:
                     st.error("Please enter valid hours studied (> 0).")
 
-    # --- PLAN STUDY TAB ---
+    # ========== Plan Study ==========
     with tabs[1]:
         st.header("📅 Plan a Study Session")
         plan_subject = st.selectbox("📖 Subject", options=list(SUBJECT_CHAPTERS.keys()), key="plan_subject")
@@ -207,7 +204,7 @@ def main():
                 else:
                     st.error("Please enter valid planned hours (> 0).")
 
-    # --- ADD EXAM RESULT TAB ---
+    # ========== Add Exam Result ==========
     with tabs[2]:
         st.header("🎯 Add New Exam Result")
         with st.form("exam_result_form", clear_on_submit=True):
@@ -232,164 +229,147 @@ def main():
                     except Exception as e:
                         st.error(f"Failed to add exam record: {e}")
 
-    # --- STUDY DASHBOARD TAB ---
+    # ========== Study Dashboard ==========
     with tabs[3]:
         st.header("📊 Study Dashboard")
         df = get_study_records()
         plan_df = get_study_plans()
 
-        # Filters with unique keys!
-        with st.expander("Filters", expanded=True):
-            subj_set = set(df['subject']).union(set(plan_df['subject']))
-            chap_set = set(df['chapter']).union(set(plan_df['chapter']))
-            book_set = set(df['book_material'])
-            f_subject = st.multiselect("Subject", options=sorted(subj_set), key="filter_subject")
-            f_chapter = st.multiselect("Chapter", options=sorted(chap_set), key="filter_chapter")
-            f_book = st.multiselect("Book/Material Used", options=sorted(book_set), key="filter_book")
-            start_date_col, end_date_col = st.columns(2)
-            f_start_date = start_date_col.date_input("Start Date", value=None, key="filter_start_date")
-            f_end_date = end_date_col.date_input("End Date", value=None, key="filter_end_date")
+        if df.empty and plan_df.empty:
+            st.info("No study or plan records found yet.")
+        else:
+            # Safe sets for filters to avoid KeyErrors
+            subj_set_study = set(df['subject']) if 'subject' in df.columns else set()
+            subj_set_plan = set(plan_df['subject']) if 'subject' in plan_df.columns else set()
+            subj_set = subj_set_study.union(subj_set_plan)
 
-        # Filter dataframes
-        if f_subject:
-            df = df[df['subject'].isin(f_subject)]
-            plan_df = plan_df[plan_df['subject'].isin(f_subject)]
-        if f_chapter:
-            df = df[df['chapter'].isin(f_chapter)]
-            plan_df = plan_df[plan_df['chapter'].isin(f_chapter)]
-        if f_book:
-            df = df[df['book_material'].isin(f_book)]
-        if f_start_date:
-            df = df[pd.to_datetime(df['date']) >= pd.to_datetime(f_start_date)]
-            plan_df = plan_df[pd.to_datetime(plan_df['plan_date']) >= pd.to_datetime(f_start_date)]
-        if f_end_date:
-            df = df[pd.to_datetime(df['date']) <= pd.to_datetime(f_end_date)]
-            plan_df = plan_df[pd.to_datetime(plan_df['plan_date']) <= pd.to_datetime(f_end_date)]
+            chap_set_study = set(df['chapter']) if 'chapter' in df.columns else set()
+            chap_set_plan = set(plan_df['chapter']) if 'chapter' in plan_df.columns else set()
+            chap_set = chap_set_study.union(chap_set_plan)
 
-        # Convert date columns if not empty
-        if not df.empty:
-            df['date'] = pd.to_datetime(df['date'])
-        if not plan_df.empty:
-            plan_df['plan_date'] = pd.to_datetime(plan_df['plan_date'])
+            book_set = set(df['book_material']) if 'book_material' in df.columns else set()
 
-        st.subheader("Planned vs Actual Study Hours")
-        planned_agg = plan_df.groupby(['plan_date', 'subject', 'chapter']).agg({'planned_hours': 'sum'}).reset_index()
-        actual_agg = df.groupby(['date', 'subject', 'chapter']).agg({'hours_studied': 'sum'}).reset_index()
-        merged = pd.merge(planned_agg, actual_agg,
-                          left_on=['plan_date', 'subject', 'chapter'],
-                          right_on=['date', 'subject', 'chapter'], how='outer')
-        merged['plan_date'] = merged['plan_date'].fillna(merged['date'])
-        merged['planned_hours'] = merged['planned_hours'].fillna(0)
-        merged['hours_studied'] = merged['hours_studied'].fillna(0)
-        merged = merged.rename(columns={
-            'plan_date': 'Date',
-            'subject': 'Subject',
-            'chapter': 'Chapter',
-            'planned_hours': 'Planned Hours',
-            'hours_studied': 'Actual Hours'
-        })
-        merged = merged[['Date', 'Subject', 'Chapter', 'Planned Hours', 'Actual Hours']].sort_values('Date', ascending=False)
-        st.dataframe(merged, use_container_width=True)
+            with st.expander("Filters", expanded=True):
+                f_subject = st.multiselect("Subject", options=sorted(subj_set), key="filter_subject")
+                f_chapter = st.multiselect("Chapter", options=sorted(chap_set), key="filter_chapter")
+                f_book = st.multiselect("Book/Material Used", options=sorted(book_set), key="filter_book")
+                start_date_col, end_date_col = st.columns(2)
+                f_start_date = start_date_col.date_input("Start Date", value=None, key="filter_start_date")
+                f_end_date = end_date_col.date_input("End Date", value=None, key="filter_end_date")
 
-        st.markdown("### Study Records")
-        st.dataframe(
-            df[['id' if 'id' in df.columns else '_id', 'date', 'subject', 'chapter', 'book_material', 'hours_studied', 'remarks']]
-            .rename(columns={'_id': 'ID', 'id': 'ID'}), use_container_width=True
-        )
+            # Filter study records based on selections
+            if f_subject:
+                df = df[df['subject'].isin(f_subject)]
+                plan_df = plan_df[plan_df['subject'].isin(f_subject)]
+            if f_chapter:
+                df = df[df['chapter'].isin(f_chapter)]
+                plan_df = plan_df[plan_df['chapter'].isin(f_chapter)]
+            if f_book:
+                df = df[df['book_material'].isin(f_book)]
+            if f_start_date:
+                df = df[pd.to_datetime(df['date']) >= pd.to_datetime(f_start_date)]
+                plan_df = plan_df[pd.to_datetime(plan_df['plan_date']) >= pd.to_datetime(f_start_date)]
+            if f_end_date:
+                df = df[pd.to_datetime(df['date']) <= pd.to_datetime(f_end_date)]
+                plan_df = plan_df[pd.to_datetime(plan_df['plan_date']) <= pd.to_datetime(f_end_date)]
 
-        st.markdown("### Delete a Study Record")
-        del_id = st.text_input("Enter Study Record ID to delete (copy from ID column above)", key="del_study_id")
-        if st.button("Delete Study Record"):
-            try:
+            # Convert dates to datetime
+            if not df.empty:
+                df['date'] = pd.to_datetime(df['date'])
+            if not plan_df.empty:
+                plan_df['plan_date'] = pd.to_datetime(plan_df['plan_date'])
+
+            # Planned vs Actual aggregate table
+            st.subheader("Planned vs Actual Study Hours")
+            planned_agg = plan_df.groupby(['plan_date', 'subject', 'chapter']).agg({'planned_hours': 'sum'}).reset_index()
+            actual_agg = df.groupby(['date', 'subject', 'chapter']).agg({'hours_studied': 'sum'}).reset_index()
+            merged = pd.merge(planned_agg, actual_agg,
+                              left_on=['plan_date', 'subject', 'chapter'],
+                              right_on=['date', 'subject', 'chapter'],
+                              how='outer')
+            merged['plan_date'] = merged['plan_date'].fillna(merged['date'])
+            merged['planned_hours'] = merged['planned_hours'].fillna(0)
+            merged['hours_studied'] = merged['hours_studied'].fillna(0)
+            merged = merged.rename(columns={
+                'plan_date': 'Date',
+                'subject': 'Subject',
+                'chapter': 'Chapter',
+                'planned_hours': 'Planned Hours',
+                'hours_studied': 'Actual Hours'
+            })
+            merged = merged[['Date', 'Subject', 'Chapter', 'Planned Hours', 'Actual Hours']].sort_values('Date', ascending=False)
+            st.dataframe(merged, use_container_width=True)
+
+            # Show study records table
+            st.markdown("### Study Records")
+            display_df = df.copy()
+            # Rename MongoDB _id to ID for display
+            if '_id' in display_df.columns:
+                display_df = display_df.rename(columns={'_id': 'ID'})
+            st.dataframe(
+                display_df[['ID', 'date', 'subject', 'chapter', 'book_material', 'hours_studied', 'remarks']],
+                use_container_width=True
+            )
+
+            # Record deletion input and button
+            st.markdown("### Delete a Study Record")
+            del_id = st.text_input("Enter Study Record ID to delete (copy from ID column above)", key="del_study_id")
+            if st.button("Delete Study Record"):
                 if del_id:
-                    delete_study_record(del_id)
-                    st.success(f"Deleted study record ID: {del_id}")
-                    st.experimental_rerun()
+                    try:
+                        delete_study_record(del_id)
+                        st.success(f"Deleted study record ID: {del_id}")
+                        st.experimental_rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting record: {e}")
                 else:
                     st.error("Please enter a valid Study Record ID")
-            except Exception as e:
-                st.error(f"Error deleting record: {e}")
 
-    # --- EXAM DASHBOARD TAB ---
+    # ========== Exam Dashboard ==========
     with tabs[4]:
         st.header("📈 Exam Dashboard")
         exam_df = get_exam_records()
 
-        with st.expander("Filters", expanded=True):
-            f_subject_exam = st.multiselect("Subject", options=sorted(exam_df['subject'].unique()), key="filter_exam_subject")
-            f_exam_type = st.multiselect("Exam Type", options=sorted(exam_df['exam_type'].unique()), key="filter_exam_type")
-            start_exam_col, end_exam_col = st.columns(2)
-            start_exam_date = start_exam_col.date_input("Exam Start Date", value=None, key="filter_exam_start_date")
-            end_exam_date = end_exam_col.date_input("Exam End Date", value=None, key="filter_exam_end_date")
-
-        if f_subject_exam:
-            exam_df = exam_df[exam_df['subject'].isin(f_subject_exam)]
-        if f_exam_type:
-            exam_df = exam_df[exam_df['exam_type'].isin(f_exam_type)]
-        if start_exam_date:
-            exam_df = exam_df[pd.to_datetime(exam_df['exam_date']) >= pd.to_datetime(start_exam_date)]
-        if end_exam_date:
-            exam_df = exam_df[pd.to_datetime(exam_df['exam_date']) <= pd.to_datetime(end_exam_date)]
-
         if exam_df.empty:
             st.info("No exam records found.")
         else:
+            with st.expander("Filters", expanded=True):
+                f_subject_exam = st.multiselect("Subject", options=sorted(exam_df['subject'].unique()), key="filter_exam_subject")
+                f_exam_type = st.multiselect("Exam Type", options=sorted(exam_df['exam_type'].unique()), key="filter_exam_type")
+                start_exam_col, end_exam_col = st.columns(2)
+                start_exam_date = start_exam_col.date_input("Exam Start Date", value=None, key="filter_exam_start_date")
+                end_exam_date = end_exam_col.date_input("Exam End Date", value=None, key="filter_exam_end_date")
+
+            if f_subject_exam:
+                exam_df = exam_df[exam_df['subject'].isin(f_subject_exam)]
+            if f_exam_type:
+                exam_df = exam_df[exam_df['exam_type'].isin(f_exam_type)]
+            if start_exam_date:
+                exam_df = exam_df[pd.to_datetime(exam_df['exam_date']) >= pd.to_datetime(start_exam_date)]
+            if end_exam_date:
+                exam_df = exam_df[pd.to_datetime(exam_df['exam_date']) <= pd.to_datetime(end_exam_date)]
+
+            # Convert exam_date
             exam_df['exam_date'] = pd.to_datetime(exam_df['exam_date'])
-            display = exam_df[['id' if 'id' in exam_df.columns else '_id','exam_date','subject','exam_type','marks_scored','maximum_marks','improvements']].copy()
+
+            display = exam_df.copy()
+            if '_id' in display.columns:
+                display.rename(columns={'_id':'ID'}, inplace=True)
+
             display['percentage'] = ((display['marks_scored'] / display['maximum_marks'])*100).round(1).astype(str) + '%'
-            display.rename(
-                columns={
-                    '_id':'ID','id':'ID','exam_date':'Exam Date','subject':'Subject','exam_type':'Exam Type',
-                    'marks_scored':'Marks','maximum_marks':'Max','improvements':'Improvement'
-                },
-                inplace=True
-            )
-            display = display[['ID','Exam Date','Subject','Exam Type','Marks','Max','percentage','Improvement']]
+
+            display = display[['ID','exam_date','subject','exam_type','marks_scored','maximum_marks','percentage','improvements']]
+            display.rename(columns={
+                'exam_date': 'Exam Date',
+                'subject': 'Subject',
+                'exam_type': 'Exam Type',
+                'marks_scored':'Marks',
+                'maximum_marks':'Max',
+                'improvements':'Improvement'
+            }, inplace=True)
+
             st.dataframe(display, use_container_width=True)
 
             st.markdown("### Delete an Exam Record")
             del_exam_id = st.text_input(
-                "Enter Exam Record ID to delete (copy from ID column above)", key="del_exam_id"
-            )
-            if st.button("Delete Exam Record"):
-                try:
-                    if del_exam_id:
-                        delete_exam_record(del_exam_id)
-                        st.success(f"Deleted exam record ID: {del_exam_id}")
-                        st.experimental_rerun()
-                    else:
-                        st.error("Please enter a valid Exam Record ID")
-                except Exception as e:
-                    st.error(f"Error deleting record: {e}")
-
-            st.markdown("---")
-            st.subheader("Exam Performance Summary")
-            total_score = exam_df['marks_scored'].sum()
-            total_max = exam_df['maximum_marks'].sum()
-            avg_score = (total_score/total_max)*100 if total_max > 0 else 0
-            st.metric("Average Score Across Exams", f"{avg_score:.1f}%")
-            exams_per_subject = exam_df.groupby('subject').size().sort_values(ascending=False)
-            st.write("Exams taken per subject:")
-            st.dataframe(exams_per_subject)
-            fig2 = px.bar(
-                exam_df, x=exam_df['exam_date'].dt.strftime('%d-%b-%Y'),
-                y=(exam_df['marks_scored']/exam_df['maximum_marks'])*100,
-                color="subject",
-                labels={'x':'Exam Date','y':'Score %'}, title="Exam Scores Over Time"
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-
-    # --- SIDE BAR EXPORT ---
-    st.sidebar.markdown("## 📥 Export Data")
-    if st.sidebar.button("Export all data to Excel"):
-        data = export_all_data()
-        st.sidebar.download_button(
-            label="Download Excel file",
-            data=data,
-            file_name=f"study_tracker_data_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-
-if __name__ == "__main__":
-    main()
+                "Enter Exam Record ID to delete (copy from ID column above)", key="del_exam
