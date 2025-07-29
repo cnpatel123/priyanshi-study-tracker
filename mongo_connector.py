@@ -6,14 +6,17 @@ from datetime import datetime
 from bson.objectid import ObjectId
 
 # ---- CONFIGURATION ----
-# Replace <password> and <your-cluster> as per your MongoDB Atlas cluster details
-MONGO_URI = "mongodb+srv://cnpatel123:cnpatel@123@studytracker.xer6ru9.mongodb.net/?retryWrites=true&w=majority&appName=Studytracker"
+# Replace <password> and <your-cluster> with your actual MongoDB Atlas password and cluster details
+MONGO_URI = "mongodb+srv://cnpatel123:cnpatel%40123@studytracker.xer6ru9.mongodb.net/?retryWrites=true&w=majority&appName=Studytracker"
+
 DB_NAME = "studytracker_db"
 
 def get_client():
+    """Create and return a MongoDB client."""
     return MongoClient(MONGO_URI)
 
 def get_collection(collection_name):
+    """Return a MongoDB collection handle."""
     client = get_client()
     return client[DB_NAME][collection_name]
 
@@ -34,7 +37,8 @@ def add_study_record(date, subject, chapter, book_material, hours_studied, remar
 def get_study_records():
     col = get_collection("study_records")
     df = pd.DataFrame(list(col.find()))
-    if "_id" in df: df["_id"] = df["_id"].astype(str)
+    if not df.empty and "_id" in df:
+        df["_id"] = df["_id"].astype(str)
     return df
 
 def delete_study_record(record_id):
@@ -58,7 +62,8 @@ def add_exam_record(exam_date, subject, exam_type, maximum_marks, marks_scored, 
 def get_exam_records():
     col = get_collection("exam_records")
     df = pd.DataFrame(list(col.find()))
-    if "_id" in df: df["_id"] = df["_id"].astype(str)
+    if not df.empty and "_id" in df:
+        df["_id"] = df["_id"].astype(str)
     return df
 
 def delete_exam_record(record_id):
@@ -81,9 +86,19 @@ def add_study_plan(plan_date, subject, chapter, planned_hours, remarks):
 def get_study_plans():
     col = get_collection("study_plans")
     df = pd.DataFrame(list(col.find()))
-    if "_id" in df: df["_id"] = df["_id"].astype(str)
+    if not df.empty and "_id" in df:
+        df["_id"] = df["_id"].astype(str)
     return df
 
 def delete_study_plan(record_id):
     col = get_collection("study_plans")
     col.delete_one({"_id": ObjectId(record_id)})
+
+# --- Optional: Test connection snippet ---
+if __name__ == "__main__":
+    try:
+        client = get_client()
+        client.server_info()  # Verify connection
+        print("✅ MongoDB connection successful!")
+    except Exception as e:
+        print("❌ MongoDB connection failed:", e)
