@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
 from datetime import date, datetime
 import plotly.express as px
 from io import BytesIO
+
+# Import MongoDB functions (make sure mongo_connector.py is in the same folder)
 from mongo_connector import (
     add_study_record, get_study_records, delete_study_record,
     add_exam_record, get_exam_records, delete_exam_record,
@@ -16,6 +17,7 @@ st.set_page_config(
     layout="wide"
 )
 
+# Subject chapters dictionary
 SUBJECT_CHAPTERS = {
     "Science": [
         "Light - Reflection and Refraction",
@@ -130,130 +132,19 @@ EXAM_TYPES = [
     "Others"
 ]
 
-DATABASE_FILE = "study_tracker.db"
-
-def init_db():
-    conn = sqlite3.connect(DATABASE_FILE)
-    c = conn.cursor()
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS study_records (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        chapter TEXT NOT NULL,
-        book_material TEXT NOT NULL,
-        hours_studied REAL NOT NULL,
-        remarks TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS exam_records (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        exam_date TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        exam_type TEXT NOT NULL,
-        maximum_marks INTEGER NOT NULL,
-        marks_scored INTEGER NOT NULL,
-        improvements TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS study_plan (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        plan_date TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        chapter TEXT NOT NULL,
-        planned_hours REAL NOT NULL,
-        remarks TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
-    conn.commit()
-    conn.close()
-
-def insert_study_record(date, subject, chapter, book_material, hours_studied, remarks):
-    conn = sqlite3.connect(DATABASE_FILE)
-    c = conn.cursor()
-    c.execute(
-        '''INSERT INTO study_records (date, subject, chapter, book_material, hours_studied, remarks)
-           VALUES (?, ?, ?, ?, ?, ?)''',
-        (date, subject, chapter, book_material, hours_studied, remarks)
-    )
-    conn.commit()
-    conn.close()
-
-def insert_exam_record(exam_date, subject, exam_type, maximum_marks, marks_scored, improvements):
-    conn = sqlite3.connect(DATABASE_FILE)
-    c = conn.cursor()
-    c.execute(
-        '''INSERT INTO exam_records (exam_date, subject, exam_type, maximum_marks, marks_scored, improvements)
-           VALUES (?, ?, ?, ?, ?, ?)''',
-        (exam_date, subject, exam_type, maximum_marks, marks_scored, improvements)
-    )
-    conn.commit()
-    conn.close()
-
-def insert_study_plan(plan_date, subject, chapter, planned_hours, remarks):
-    conn = sqlite3.connect(DATABASE_FILE)
-    c = conn.cursor()
-    c.execute(
-        '''INSERT INTO study_plan (plan_date, subject, chapter, planned_hours, remarks)
-           VALUES (?, ?, ?, ?, ?)''',
-        (plan_date, subject, chapter, planned_hours, remarks)
-    )
-    conn.commit()
-    conn.close()
-
-def get_study_records():
-    conn = sqlite3.connect(DATABASE_FILE)
-    df = pd.read_sql_query('SELECT * FROM study_records ORDER BY date DESC, id DESC', conn)
-    conn.close()
-    return df
-
-def get_exam_records():
-    conn = sqlite3.connect(DATABASE_FILE)
-    df = pd.read_sql_query('SELECT * FROM exam_records ORDER BY exam_date DESC, id DESC', conn)
-    conn.close()
-    return df
-
-def get_study_plans():
-    conn = sqlite3.connect(DATABASE_FILE)
-    df = pd.read_sql_query('SELECT * FROM study_plan ORDER BY plan_date DESC, id DESC', conn)
-    conn.close()
-    return df
-
-def delete_study_record(record_id):
-    conn = sqlite3.connect(DATABASE_FILE)
-    c = conn.cursor()
-    c.execute('DELETE FROM study_records WHERE id=?', (record_id,))
-    conn.commit()
-    conn.close()
-
-def delete_exam_record(record_id):
-    conn = sqlite3.connect(DATABASE_FILE)
-    c = conn.cursor()
-    c.execute('DELETE FROM exam_records WHERE id=?', (record_id,))
-    conn.commit()
-    conn.close()
-
-def delete_study_plan(record_id):
-    conn = sqlite3.connect(DATABASE_FILE)
-    c = conn.cursor()
-    c.execute('DELETE FROM study_plan WHERE id=?', (record_id,))
-    conn.commit()
-    conn.close()
-
+# Export Excel function reading from MongoDB
 def export_all_data():
     study_df = get_study_records()
     exam_df = get_exam_records()
     plan_df = get_study_plans()
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        study_df.to_excel(writer, sheet_name='Study Records', index=False)
-        exam_df.to_excel(writer, sheet_name='Exam Records', index=False)
-        plan_df.to_excel(writer, sheet_name='Study Plans', index=False)
+        # Rename _id to ID for display friendliness
+        for df, sheet in [(study_df, 'Study Records'), (exam_df, 'Exam Records'), (plan_df, 'Study Plans')]:
+            if not df.empty:
+                if "_id" in df.columns:
+                    df.rename(columns={"_id": "ID"}, inplace=True)
+                df.to_excel(writer, sheet_name=sheet, index=False)
     return output.getvalue()
 
 def main():
@@ -264,8 +155,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    init_db()
-
+    # Define tabs for UI
     tabs = st.tabs([
         "📝 Add Study Record",
         "📅 Plan Study",
@@ -274,7 +164,7 @@ def main():
         "📈 Exam Dashboard"
     ])
 
-    # --- ADD STUDY RECORD ---
+    # --- ADD STUDY RECORD TAB ---
     with tabs[0]:
         st.header("📝 Add New Study Record")
         sel_subject = st.selectbox("📖 Subject", options=list(SUBJECT_CHAPTERS.keys()), key="study_subject")
@@ -287,13 +177,16 @@ def main():
             submitted = st.form_submit_button("Add Study Record")
             if submitted:
                 if hours_studied > 0:
-                    insert_study_record(str(study_date), sel_subject, chapter, book_material, hours_studied, remarks)
-                    st.success("Study record added successfully!")
-                    st.rerun()
+                    try:
+                        add_study_record(str(study_date), sel_subject, chapter, book_material, hours_studied, remarks)
+                        st.success("Study record added successfully!")
+                        st.experimental_rerun()
+                    except Exception as e:
+                        st.error(f"Failed to add study record: {e}")
                 else:
                     st.error("Please enter valid hours studied (> 0).")
 
-    # --- PLAN STUDY ---
+    # --- PLAN STUDY TAB ---
     with tabs[1]:
         st.header("📅 Plan a Study Session")
         plan_subject = st.selectbox("📖 Subject", options=list(SUBJECT_CHAPTERS.keys()), key="plan_subject")
@@ -305,13 +198,16 @@ def main():
             submitted = st.form_submit_button("Add Study Plan")
             if submitted:
                 if planned_hours > 0:
-                    insert_study_plan(str(plan_date), plan_subject, plan_chapter, planned_hours, plan_remarks)
-                    st.success("Study plan added successfully!")
-                    st.rerun()
+                    try:
+                        add_study_plan(str(plan_date), plan_subject, plan_chapter, planned_hours, plan_remarks)
+                        st.success("Study plan added successfully!")
+                        st.experimental_rerun()
+                    except Exception as e:
+                        st.error(f"Failed to add study plan: {e}")
                 else:
                     st.error("Please enter valid planned hours (> 0).")
 
-    # --- ADD EXAM RESULT ---
+    # --- ADD EXAM RESULT TAB ---
     with tabs[2]:
         st.header("🎯 Add New Exam Result")
         with st.form("exam_result_form", clear_on_submit=True):
@@ -329,17 +225,20 @@ def main():
                 if marks_scored > maximum_marks:
                     st.error("Marks scored cannot be more than maximum marks!")
                 else:
-                    insert_exam_record(str(exam_date), exam_subject, exam_type, maximum_marks, marks_scored, improvements)
-                    st.success("Exam result added successfully!")
-                    st.rerun()
+                    try:
+                        add_exam_record(str(exam_date), exam_subject, exam_type, maximum_marks, marks_scored, improvements)
+                        st.success("Exam result added successfully!")
+                        st.experimental_rerun()
+                    except Exception as e:
+                        st.error(f"Failed to add exam record: {e}")
 
-    # --- STUDY DASHBOARD ---
+    # --- STUDY DASHBOARD TAB ---
     with tabs[3]:
         st.header("📊 Study Dashboard")
         df = get_study_records()
         plan_df = get_study_plans()
 
-        # Filters (use unique keys)
+        # Filters with unique keys!
         with st.expander("Filters", expanded=True):
             subj_set = set(df['subject']).union(set(plan_df['subject']))
             chap_set = set(df['chapter']).union(set(plan_df['chapter']))
@@ -351,7 +250,7 @@ def main():
             f_start_date = start_date_col.date_input("Start Date", value=None, key="filter_start_date")
             f_end_date = end_date_col.date_input("End Date", value=None, key="filter_end_date")
 
-        # Filter study records
+        # Filter dataframes
         if f_subject:
             df = df[df['subject'].isin(f_subject)]
             plan_df = plan_df[plan_df['subject'].isin(f_subject)]
@@ -367,7 +266,7 @@ def main():
             df = df[pd.to_datetime(df['date']) <= pd.to_datetime(f_end_date)]
             plan_df = plan_df[pd.to_datetime(plan_df['plan_date']) <= pd.to_datetime(f_end_date)]
 
-        # Convert dates
+        # Convert date columns if not empty
         if not df.empty:
             df['date'] = pd.to_datetime(df['date'])
         if not plan_df.empty:
@@ -377,31 +276,41 @@ def main():
         planned_agg = plan_df.groupby(['plan_date', 'subject', 'chapter']).agg({'planned_hours': 'sum'}).reset_index()
         actual_agg = df.groupby(['date', 'subject', 'chapter']).agg({'hours_studied': 'sum'}).reset_index()
         merged = pd.merge(planned_agg, actual_agg,
-                          left_on=['plan_date','subject','chapter'],
-                          right_on=['date','subject','chapter'], how='outer')
+                          left_on=['plan_date', 'subject', 'chapter'],
+                          right_on=['date', 'subject', 'chapter'], how='outer')
         merged['plan_date'] = merged['plan_date'].fillna(merged['date'])
         merged['planned_hours'] = merged['planned_hours'].fillna(0)
         merged['hours_studied'] = merged['hours_studied'].fillna(0)
-        merged = merged.rename(columns={'plan_date':'Date', 'subject':'Subject', 'chapter':'Chapter',
-                                      'planned_hours':'Planned Hours', 'hours_studied':'Actual Hours'})
-        merged = merged[['Date','Subject','Chapter','Planned Hours','Actual Hours']].sort_values('Date', ascending=False)
+        merged = merged.rename(columns={
+            'plan_date': 'Date',
+            'subject': 'Subject',
+            'chapter': 'Chapter',
+            'planned_hours': 'Planned Hours',
+            'hours_studied': 'Actual Hours'
+        })
+        merged = merged[['Date', 'Subject', 'Chapter', 'Planned Hours', 'Actual Hours']].sort_values('Date', ascending=False)
         st.dataframe(merged, use_container_width=True)
 
         st.markdown("### Study Records")
-        st.dataframe(df[['id','date','subject','chapter','book_material','hours_studied','remarks']]
-                     .rename(columns={'id':'ID'}), use_container_width=True)
+        st.dataframe(
+            df[['id' if 'id' in df.columns else '_id', 'date', 'subject', 'chapter', 'book_material', 'hours_studied', 'remarks']]
+            .rename(columns={'_id': 'ID', 'id': 'ID'}), use_container_width=True
+        )
 
         st.markdown("### Delete a Study Record")
-        del_id = st.number_input("Enter Study Record ID to delete", min_value=0, step=1, key="del_study_id")
+        del_id = st.text_input("Enter Study Record ID to delete (copy from ID column above)", key="del_study_id")
         if st.button("Delete Study Record"):
-            if int(del_id) in df['id'].values:
-                delete_study_record(int(del_id))
-                st.success(f"Deleted study record ID: {int(del_id)}")
-                st.rerun()
-            else:
-                st.error("Invalid Study Record ID")
+            try:
+                if del_id:
+                    delete_study_record(del_id)
+                    st.success(f"Deleted study record ID: {del_id}")
+                    st.experimental_rerun()
+                else:
+                    st.error("Please enter a valid Study Record ID")
+            except Exception as e:
+                st.error(f"Error deleting record: {e}")
 
-    # --- EXAM DASHBOARD ---
+    # --- EXAM DASHBOARD TAB ---
     with tabs[4]:
         st.header("📈 Exam Dashboard")
         exam_df = get_exam_records()
@@ -426,11 +335,11 @@ def main():
             st.info("No exam records found.")
         else:
             exam_df['exam_date'] = pd.to_datetime(exam_df['exam_date'])
-            display = exam_df[['id','exam_date','subject','exam_type','marks_scored','maximum_marks','improvements']].copy()
+            display = exam_df[['id' if 'id' in exam_df.columns else '_id','exam_date','subject','exam_type','marks_scored','maximum_marks','improvements']].copy()
             display['percentage'] = ((display['marks_scored'] / display['maximum_marks'])*100).round(1).astype(str) + '%'
             display.rename(
                 columns={
-                    'id':'ID','exam_date':'Exam Date','subject':'Subject','exam_type':'Exam Type',
+                    '_id':'ID','id':'ID','exam_date':'Exam Date','subject':'Subject','exam_type':'Exam Type',
                     'marks_scored':'Marks','maximum_marks':'Max','improvements':'Improvement'
                 },
                 inplace=True
@@ -439,17 +348,19 @@ def main():
             st.dataframe(display, use_container_width=True)
 
             st.markdown("### Delete an Exam Record")
-            del_exam_id = st.number_input(
-                "Enter Exam Record ID to delete",
-                min_value=0, step=1, key="del_exam_id"
+            del_exam_id = st.text_input(
+                "Enter Exam Record ID to delete (copy from ID column above)", key="del_exam_id"
             )
             if st.button("Delete Exam Record"):
-                if int(del_exam_id) in exam_df['id'].values:
-                    delete_exam_record(int(del_exam_id))
-                    st.success(f"Deleted exam record ID: {int(del_exam_id)}")
-                    st.rerun()
-                else:
-                    st.error("Invalid Exam Record ID")
+                try:
+                    if del_exam_id:
+                        delete_exam_record(del_exam_id)
+                        st.success(f"Deleted exam record ID: {del_exam_id}")
+                        st.experimental_rerun()
+                    else:
+                        st.error("Please enter a valid Exam Record ID")
+                except Exception as e:
+                    st.error(f"Error deleting record: {e}")
 
             st.markdown("---")
             st.subheader("Exam Performance Summary")
@@ -468,6 +379,7 @@ def main():
             )
             st.plotly_chart(fig2, use_container_width=True)
 
+    # --- SIDE BAR EXPORT ---
     st.sidebar.markdown("## 📥 Export Data")
     if st.sidebar.button("Export all data to Excel"):
         data = export_all_data()
@@ -477,6 +389,7 @@ def main():
             file_name=f"study_tracker_data_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
 
 if __name__ == "__main__":
     main()
