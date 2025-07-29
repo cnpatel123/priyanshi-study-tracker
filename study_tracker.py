@@ -4,6 +4,11 @@ import sqlite3
 from datetime import date, datetime
 import plotly.express as px
 from io import BytesIO
+from mongo_connector import (
+    add_study_record, get_study_records, delete_study_record,
+    add_exam_record, get_exam_records, delete_exam_record,
+    add_study_plan, get_study_plans, delete_study_plan
+)
 
 st.set_page_config(
     page_title="CBSE Class 10 Study Tracker - Priyanshi",
